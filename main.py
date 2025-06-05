@@ -50,7 +50,7 @@ async def analyze_image(file: UploadFile = File(...)):
     # Send image to OpenAI GPT-4o for analysis using image_url
     response = client.responses.parse(
         model="gpt-4o",
-        tools= [ { "type": "web_search_preview", "search_context_size": "high" } ],
+        tools= [ { "type": "web_search_preview"} ],
         input=[
             {"role": "system", "content": "You are a helpful assistant that describes images."},
             {
