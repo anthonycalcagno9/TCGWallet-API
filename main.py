@@ -1,6 +1,5 @@
 from typing import Union
 import base64
-import io
 
 from fastapi import FastAPI, File, UploadFile
 
