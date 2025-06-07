@@ -1,0 +1,32 @@
+[project]
+name = "tcgwallet-api"
+version = "0.1.0"
+description = "API service for TCG card identification and pricing"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi[standard]>=0.115.12",
+    "openai>=1.84.0",
+    "pydantic>=2.11.5",
+    "ruff>=0.11.12",
+    "uvicorn>=0.28.0",
+    "requests>=2.31.0",
+    "rapidfuzz>=3.6.1",
+]
+
+[tool.ruff]
+select = ["E", "F", "I"]
+line-length = 100
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-cov>=5.0.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
