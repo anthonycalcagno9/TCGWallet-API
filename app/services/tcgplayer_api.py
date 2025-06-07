@@ -1,76 +1,16 @@
 """
-TCGPlayer API client module for One Piece Card Game data.
-This module provides typed interfaces and functions for accessing TCGPlayer API endpoints.
+TCGPlayer API client service for fetching card data and prices.
 """
-from typing import List, Optional, Any, TypedDict
+from typing import List, Optional
+
 import requests
 
-
-# Base response type
-class TCGPlayerResponse(TypedDict):
-    success: bool
-    errors: List[str]
-    totalItems: Optional[int]
-    results: List[Any]
+from app.models.tcgplayer import TCGPlayerGroup, TCGPlayerPrice, TCGPlayerProduct
 
 
-# Group types
-class TCGPlayerGroup(TypedDict):
-    groupId: int
-    name: str
-    abbreviation: str
-    isSupplemental: bool
-    publishedOn: str
-    modifiedOn: str
-    categoryId: int
-
-
-class TCGPlayerGroupResponse(TCGPlayerResponse):
-    results: List[TCGPlayerGroup]
-
-
-# Product types
-class PresaleInfo(TypedDict):
-    isPresale: bool
-    releasedOn: Optional[str]
-    note: Optional[str]
-
-
-class TCGPlayerProduct(TypedDict):
-    productId: int
-    name: str
-    cleanName: str
-    imageUrl: str
-    categoryId: int
-    groupId: int
-    url: str
-    modifiedOn: str
-    imageCount: int
-    presaleInfo: PresaleInfo
-    extendedData: List[Any]
-
-
-class TCGPlayerProductResponse(TCGPlayerResponse):
-    results: List[TCGPlayerProduct]
-
-
-# Price types
-class TCGPlayerPrice(TypedDict):
-    productId: int
-    lowPrice: Optional[float]
-    midPrice: Optional[float]
-    highPrice: Optional[float]
-    marketPrice: Optional[float]
-    directLowPrice: Optional[float]
-    subTypeName: str
-
-
-class TCGPlayerPriceResponse(TCGPlayerResponse):
-    results: List[TCGPlayerPrice]
-
-
-# TCGPlayer API client
 class TCGPlayerAPI:
+    """TCGPlayer API client for fetching card data and prices."""
+    
     BASE_URL = "https://tcgcsv.com/tcgplayer"
     CATEGORY_ID = 68  # One Piece Card Game category ID
     
@@ -164,7 +104,3 @@ class TCGPlayerAPI:
         except Exception as e:
             print(f"Error fetching prices: {type(e).__name__}: {e}")
             return []
-
-
-# Create a default instance for easy importing
-tcgplayer_api = TCGPlayerAPI()

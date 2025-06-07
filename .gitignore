@@ -187,6 +187,18 @@ cython_debug/
 # PyPI configuration file
 .pypirc
 
+# UV dependency management
+.venv/
+.uv/
+uv.toml
+.uvenv/
+.uv.toml
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
 # Cursor
 #  Cursor is an AI-powered code editor. `.cursorignore` specifies files/directories to
 #  exclude from AI features like autocomplete and code analysis. Recommended for sensitive data

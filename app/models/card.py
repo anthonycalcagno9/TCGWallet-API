@@ -1,18 +1,21 @@
 """
-Shared models for the TCGWallet API.
+Card data models for the TCGWallet API.
 """
-from typing import Optional, Literal, List, Dict, Any, Union
+from typing import List, Literal, Optional
+
 from pydantic import BaseModel
 
 # Define types for the card fields
-Rarity = Literal['Common', 'Uncommon', 'Rare', 'Super Rare', 'Secret Rare', 'Promo', 'DON!!', 'Leader']
+Rarity = Literal[
+    'Common', 'Uncommon', 'Rare', 'Super Rare', 'Secret Rare', 'Promo', 'DON!!', 'Leader'
+]
 Color = Literal['Red', 'Blue', 'Green', 'Yellow', 'Black', 'Purple']
 Counter = Literal[1000, 2000, 3000]
 CardType = Literal['Character', 'Leader', 'Event', 'Stage']
 Attribute = Literal['Strike', 'Slash', 'Special', 'Ranged', 'Wisdom']
 
 class CardInfo(BaseModel):
-    """Card information model shared between modules."""
+    """Card information model parsed from image analysis."""
     name: Optional[str] = None
     type: Optional[CardType] = None
     cost: Optional[int] = None
@@ -21,9 +24,11 @@ class CardInfo(BaseModel):
     counter: Optional[Counter] = None
     trait: Optional[str] = None
     card_number: Optional[str] = None
+    price: Optional[float] = None
+    tcgplayer_url: Optional[str] = None
 
 class CardData(BaseModel):
-    """Card data model representing card data from JSON files."""
+    """Card data model representing complete card data from database or JSON files."""
     id: str
     pack_id: str
     name: str
@@ -47,15 +52,3 @@ class MatchResult(BaseModel):
     """Result model for card matching operations."""
     card: CardData
     score: float
-
-# Example card for testing
-mock_card = CardInfo(
-    name='Monkey.D.Luffy',
-    type='Character',
-    cost=6,
-    rarity='Promo',
-    color='Red',
-    counter=None,
-    trait='Supernovas/Straw Hat Crew',
-    card_number='P-001',
-)

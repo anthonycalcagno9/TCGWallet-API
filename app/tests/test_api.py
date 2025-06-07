@@ -1,7 +1,13 @@
+"""
+Tests for the TCGPlayer API client.
+"""
 import asyncio
-from tcgplayer_api import tcgplayer_api
+
+from app.services import tcgplayer_api
+
 
 async def test_api():
+    """Test the TCGPlayer API client."""
     try:
         # Test the get_groups method
         print("\nTesting tcgplayer_api.get_groups()...")
@@ -33,5 +39,11 @@ async def test_api():
     except Exception as e:
         print(f"Error in test: {type(e).__name__}: {e}")
 
-if __name__ == "__main__":
+
+def main():
+    """Run the TCGPlayer API tests."""
     asyncio.run(test_api())
+
+
+if __name__ == "__main__":
+    main()

@@ -1,23 +1,21 @@
-#!/usr/bin/env python3
 """
-Test script for the CardMatcher class.
+Tests for the card matcher service.
 """
-import json
 import argparse
-from typing import Dict, Any
-from pprint import pprint
+import json
+from typing import Any, Dict
 
-# Import models
-from models import CardInfo, CardData, MatchResult, mock_card
-from card_matcher import CardMatcher
+from app.models.card import CardInfo
+from app.services.card_matcher import CardMatcher
 
 
-def test_with_mock_card():
+def test_with_mock_card(mock_card: CardInfo):
     """
-    Test with the mock card from models.py
-    """
-    # We're using the mock_card imported from models.py
+    Test with a mock card
     
+    Args:
+        mock_card: Mock card info for testing
+    """
     print(f"Testing with mock card: {mock_card}")
     matcher = CardMatcher()
     matches = matcher.find_best_matches(mock_card, num_results=3)
@@ -39,6 +37,10 @@ def test_with_mock_card():
 def test_with_custom_card(card_info: Dict[str, Any], weights: Dict[str, float]):
     """
     Test with a custom card and weights
+    
+    Args:
+        card_info: Dict with card info to test
+        weights: Dict with custom weights for matching
     """
     # Convert dict to CardInfo
     info = CardInfo(**card_info)
@@ -64,10 +66,12 @@ def test_with_custom_card(card_info: Dict[str, Any], weights: Dict[str, float]):
         print(f"Types: {card_data.types}")
 
 
-def parse_args():
+def main():
+    """Run the card matcher tests."""
+    # Setup argument parser
     parser = argparse.ArgumentParser(description='Test the CardMatcher class')
     parser.add_argument('--mock', action='store_true', 
-                        help='Test with mock card from main.py')
+                        help='Test with mock card from models')
     parser.add_argument('--card-json', type=str,
                         help='JSON string with card info to test')
     parser.add_argument('--card-file', type=str, 
@@ -76,11 +80,7 @@ def parse_args():
                         help='JSON string with custom weights')
     parser.add_argument('--weights-file', type=str,
                         help='JSON file with custom weights')
-    return parser.parse_args()
-
-
-def main():
-    args = parse_args()
+    args = parser.parse_args()
     
     # Default weights
     weights = {
@@ -101,8 +101,10 @@ def main():
             weights.update(json.load(f))
     
     if args.mock:
+        # Import mock card from models
+        from app.models import mock_card
         # Test with mock card
-        test_with_mock_card()
+        test_with_mock_card(mock_card)
     elif args.card_json or args.card_file:
         # Load card info
         if args.card_json:

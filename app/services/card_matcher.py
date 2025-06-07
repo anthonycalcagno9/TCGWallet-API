@@ -1,12 +1,16 @@
-import json
-from typing import Dict, List, Optional, Tuple, Any
+"""
+Card matching service for comparing a CardInfo object with card data from JSON files
+and finding the closest match using a weighted scoring system.
+"""
 import glob
+import json
+from typing import Dict, List, Optional
 
-# For string similarity comparison
+# Import models
 from rapidfuzz import distance as editdistance
 
-# Import models from our models file
-from models import CardInfo, CardData, MatchResult
+from app.models.card import CardData, CardInfo, MatchResult
+
 
 class CardMatcher:
     """
@@ -66,7 +70,9 @@ class CardMatcher:
             
         return self._all_cards
     
-    def _calculate_similarity_score(self, llm_parsed_card_info: CardInfo, card_data: CardData) -> float:
+    def _calculate_similarity_score(
+        self, llm_parsed_card_info: CardInfo, card_data: CardData
+    ) -> float:
         """
         Calculate a weighted similarity score between a CardInfo object and a CardData object.
         Higher score means better match.
@@ -133,7 +139,9 @@ class CardMatcher:
             # CardInfo has a single color, but JSON has a list of colors
             if llm_parsed_card_info.color in card_data.colors:
                 score += self.weights["color"]
-            elif card_data.colors and llm_parsed_card_info.color.lower() in [c.lower() for c in card_data.colors]:
+            elif card_data.colors and llm_parsed_card_info.color.lower() in [
+                c.lower() for c in card_data.colors
+            ]:
                 # Case-insensitive match
                 score += self.weights["color"] * 0.9
         
