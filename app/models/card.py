@@ -1,7 +1,7 @@
 """
 Card data models for the TCGWallet API.
 """
-from typing import List, Literal, Optional
+from typing import Dict, List, Literal, Optional
 
 from pydantic import BaseModel
 
@@ -26,6 +26,7 @@ class CardInfo(BaseModel):
     card_number: Optional[str] = None
     price: Optional[float] = None
     tcgplayer_url: Optional[str] = None
+    tcgplayer_product_id: Optional[int] = None
 
 class CardData(BaseModel):
     """Card data model representing complete card data from database or JSON files."""
@@ -52,3 +53,6 @@ class MatchResult(BaseModel):
     """Result model for card matching operations."""
     card: CardData
     score: float
+    tcgplayer_product_id: Optional[int] = None
+    tcgplayer_product: Optional[Dict] = None
+    tcgplayer_price: Optional[Dict] = None
