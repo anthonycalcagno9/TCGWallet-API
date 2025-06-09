@@ -72,6 +72,36 @@ python run.py
 
 The API will be available at http://localhost:8000
 
+## Configuration
+
+### Environment Variables
+
+Copy `.env.example` to `.env` and configure the following:
+
+```bash
+# Required: OpenAI API Key for image analysis
+OPENAI_API_KEY=your_openai_api_key_here
+
+# Optional: Image compression settings
+COMPRESS_IMAGES=true          # Enable/disable image compression (default: true)
+IMAGE_MAX_SIZE=1024          # Max image dimensions in pixels (default: 1024)
+IMAGE_QUALITY=85             # JPEG quality 1-100 (default: 85)
+MAX_FILE_SIZE_MB=4.0         # Max file size before compression (default: 4.0)
+```
+
+### Image Compression
+
+The API automatically compresses uploaded images before sending them to OpenAI to:
+- Reduce API costs and improve response times
+- Stay within OpenAI's file size limits
+- Maintain good image quality for vision analysis
+
+Features:
+- Resizes large images while maintaining aspect ratio
+- Converts images to optimized JPEG format
+- Applies intelligent quality compression
+- Provides compression ratio feedback in logs
+
 ## API Endpoints
 
 - `/api/image/analyze-image` - Upload and analyze card images

@@ -2,7 +2,6 @@
 Pack service for retrieving pack information from packs.json
 """
 import json
-import os
 from typing import Dict, List, Optional
 
 from app.models.card import CardData
@@ -101,7 +100,6 @@ class PackService:
         # Fetch all groups from TCGPlayer API and find the matching abbreviation
         groups = await tcgplayer_api.get_groups()
         for group in groups:
-            print(f"Checking group: {group.get('abbreviation')} against pack label: {pack_label}")
             if group.get("abbreviation") == pack_label:
                 return group.get("groupId")
         

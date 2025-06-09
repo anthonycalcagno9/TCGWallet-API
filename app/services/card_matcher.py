@@ -10,6 +10,7 @@ from typing import Dict, List, Optional
 from rapidfuzz import distance as editdistance
 
 from app.models.card import CardData, CardInfo, MatchResult
+from app.utils.image_compare import calculate_image_similarity
 
 
 class CardMatcher:
@@ -21,7 +22,8 @@ class CardMatcher:
     def __init__(
         self,
         weights: Dict[str, float] = None,
-        cards_dir: str = "data/cards_by_pack"
+        cards_dir: str = "data/cards_by_pack",
+        image_weight: float = 8.0  # High weight for image similarity
     ):
         """
         Initialize the CardMatcher with configurable weights.
@@ -29,20 +31,22 @@ class CardMatcher:
         Args:
             weights: Dictionary mapping field names to their weights
             cards_dir: Directory containing the card JSON files
+            image_weight: Weight for image similarity score
         """
         # Default weights
         self.weights = weights or {
-            "id": 7.0,        # Highest weight for card ID/number
-            "cost": 5.0,      # Second highest for cost
-            "name": 3.0,      # Medium weight for name
-            "color": 3.0,     # Medium weight for color
-            "counter": 3.0,   # Medium weight for counter
-            "category": 2.0,  # Lower weight for category/type
-            "rarity": 2.0     # Lower weight for rarity
+            "name": 9.0,   
+            "id": 7.0,    
+            "cost": 5.0,      
+            "color": 3.0,   
+            "counter": 3.0,   
+            "category": 2.0,  
+            "rarity": 2.0     
         }
         
         self.cards_dir = cards_dir
         self._all_cards = None  # Lazy loaded
+        self.image_weight = image_weight
     
     @property
     def all_cards(self) -> List[CardData]:
@@ -70,43 +74,57 @@ class CardMatcher:
             
         return self._all_cards
     
-    def _calculate_similarity_score(
+    def _calculate_metadata_similarity_score(
         self, llm_parsed_card_info: CardInfo, card_data: CardData
     ) -> float:
         """
-        Calculate a weighted similarity score between a CardInfo object and a CardData object.
+        Calculate a weighted similarity score based on metadata only (no image comparison).
         Higher score means better match.
         
         Args:
-            card_info: CardInfo object from the image analysis
+            llm_parsed_card_info: CardInfo object from the image analysis
             card_data: CardData object from JSON
             
         Returns:
-            float: Similarity score
+            float: Similarity score (0-1 range)
         """
         score = 0.0
         max_possible_score = sum(self.weights.values())
         
-        # ID/card number matching
+        # ID/card number matching - enhanced for parallel cards
         if llm_parsed_card_info.card_number and card_data.id:
-            # Normalize both IDs to remove potential formatting differences
-            info_id = llm_parsed_card_info.card_number.upper().replace('-', '').replace('_', '')
-            data_id = card_data.id.upper().replace('-', '').replace('_', '')
+            # Extract base card IDs (remove parallel suffixes like _p1, _p2, etc.)
+            def extract_base_id(card_id: str) -> str:
+                """Extract base card ID by removing parallel suffixes"""
+                return card_id.split('_p')[0] if '_p' in card_id else card_id
             
-            # Exact match
-            if info_id == data_id:
+            info_base_id = extract_base_id(llm_parsed_card_info.card_number)
+            data_base_id = extract_base_id(card_data.id)
+            
+            # Check for base ID match (handles parallel cards)
+            if info_base_id.upper().replace('-', '') == data_base_id.upper().replace('-', ''):
+                # Exact base match gets full score
                 score += self.weights["id"]
-            # For partially matching IDs, use Levenshtein distance
             else:
-                distance = editdistance.Levenshtein.distance(info_id, data_id)
-                max_len = max(len(info_id), len(data_id))
+                # Normalize both IDs to remove potential formatting differences
+                info_id = llm_parsed_card_info.card_number.upper().replace('-', '').replace('_', '')
+                data_id = card_data.id.upper().replace('-', '').replace('_', '')
                 
-                if max_len > 0:
-                    similarity = 1.0 - (distance / max_len)
+                # Exact full match
+                if info_id == data_id:
+                    score += self.weights["id"]
+                # For partially matching IDs, use Levenshtein distance
+                else:
+                    distance = editdistance.Levenshtein.distance(info_id, data_id)
+                    max_len = max(len(info_id), len(data_id))
                     
-                    # Only consider significant matches
-                    if similarity >= 0.7:  # Higher threshold for IDs since they're more specific
-                        score += self.weights["id"] * similarity
+                    if max_len > 0:
+                        similarity = 1.0 - (distance / max_len)
+                        
+                        # Only consider significant matches
+                        # Higher threshold for IDs since they're more specific
+                        if similarity >= 0.7:
+                            score += self.weights["id"] * similarity
         
         # Cost matching
         if llm_parsed_card_info.cost is not None and card_data.cost is not None:
@@ -182,11 +200,68 @@ class CardMatcher:
         # Normalize score to 0-1 range
         return score / max_possible_score
     
+    def _calculate_image_similarity_score(
+        self, llm_parsed_card_info: CardInfo, card_data: CardData
+    ) -> float:
+        """
+        Calculate image similarity score between CardInfo and CardData.
+        
+        Args:
+            llm_parsed_card_info: CardInfo object from the image analysis
+            card_data: CardData object from JSON
+            
+        Returns:
+            float: Image similarity score (0-1 range), or 0.0 if comparison fails
+        """ 
+        if not llm_parsed_card_info.image_path or not card_data.img_full_url:
+            return 0.0
+            
+        try:
+            return calculate_image_similarity(
+                llm_parsed_card_info.image_path, card_data.img_full_url
+            )
+        except Exception as e:
+            print(f"Error comparing images for {llm_parsed_card_info.card_number}: {e}")
+            return 0.0
+    
+    def _calculate_combined_similarity_score(
+        self, llm_parsed_card_info: CardInfo, card_data: CardData
+    ) -> float:
+        """
+        Calculate combined similarity score including both metadata and image comparison.
+        
+        Args:
+            llm_parsed_card_info: CardInfo object from the image analysis
+            card_data: CardData object from JSON
+            
+        Returns:
+            float: Combined similarity score (0-1 range)
+        """
+        # Get metadata score
+        metadata_score = self._calculate_metadata_similarity_score(llm_parsed_card_info, card_data)
+        
+        # Get image score
+        image_score = self._calculate_image_similarity_score(llm_parsed_card_info, card_data)
+        print(f"Comparing against image for {card_data.img_full_url}")
+        print(f"Image score for {llm_parsed_card_info.card_number}: {image_score:.4f}")
+        
+        # Calculate combined score
+        metadata_weight = sum(self.weights.values())
+        total_weight = metadata_weight + (self.image_weight if image_score > 0 else 0)
+        
+        combined_score = (
+            (metadata_score * metadata_weight + image_score * self.image_weight) 
+            / total_weight
+        )
+        
+        return combined_score
+    
     def find_best_matches(
         self, 
         llm_parsed_card_info: CardInfo, 
         num_results: int = 5,
-        min_score: float = 0.3
+        min_score: float = 0.3,
+        image_comparison_count: int = 3  # Number of top matches to apply image comparison to
     ) -> List[MatchResult]:
         """
         Find the best matching cards for a given CardInfo.
@@ -195,23 +270,51 @@ class CardMatcher:
             card_info: CardInfo object from the image analysis
             num_results: Maximum number of results to return
             min_score: Minimum similarity score to include in results
+            image_comparison_count: Number of top matches to apply image comparison to
             
         Returns:
             List of MatchResult objects containing matched card data and score
         """
-        matches = []
+        # First phase: get preliminary matches based on metadata only
+        preliminary_matches = []
         
         for card_data in self.all_cards:
-            score = self._calculate_similarity_score(llm_parsed_card_info, card_data)
+            # Initial scoring without image comparison
+            score = self._calculate_metadata_similarity_score(llm_parsed_card_info, card_data)
             if score >= min_score:
                 # Create a copy of the card data with the score
                 card_with_score = card_data.model_copy(update={"score": score})
-                matches.append(MatchResult(card=card_with_score, score=score))
+                preliminary_matches.append(MatchResult(card=card_with_score, score=score))
         
-        # Sort by score in descending order
-        matches.sort(key=lambda x: x.score, reverse=True)
+        # Sort by initial score in descending order
+        preliminary_matches.sort(key=lambda x: x.score, reverse=True)
         
-        return matches[:num_results]
+        # Take top N preliminary matches for image comparison
+        top_candidates = preliminary_matches[:image_comparison_count]
+        final_matches = []
+        
+        # Second phase: Apply image comparison only to the top candidates if we have an image
+        if llm_parsed_card_info.image_path:
+            for match in top_candidates:
+                # Recalculate score with image comparison
+                new_score = self._calculate_combined_similarity_score(
+                    llm_parsed_card_info, 
+                    match.card
+                )
+                # Update the match with the new score that includes image comparison
+                updated_card = match.card.model_copy(update={"score": new_score})
+                final_matches.append(MatchResult(card=updated_card, score=new_score))
+            
+            # Add remaining preliminary matches without image comparison
+            final_matches.extend(preliminary_matches[image_comparison_count:])
+            
+            # Re-sort all matches by the final score
+            final_matches.sort(key=lambda x: x.score, reverse=True)
+        else:
+            # If no image path available, use the preliminary matches
+            final_matches = preliminary_matches
+        
+        return final_matches[:num_results]
     
     def find_best_match(self, llm_parsed_card_info: CardInfo) -> Optional[MatchResult]:
         """

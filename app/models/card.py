@@ -27,6 +27,7 @@ class CardInfo(BaseModel):
     price: Optional[float] = None
     tcgplayer_url: Optional[str] = None
     tcgplayer_product_id: Optional[int] = None
+    image_path: Optional[str] = None  # Path to the user-uploaded image for comparison
 
 class CardData(BaseModel):
     """Card data model representing complete card data from database or JSON files."""
