@@ -394,7 +394,11 @@ If only the blue segment is filled, for example, return:
         text_format=CardInfo,
     )
     card_info = response.output_parsed
-    
+
+
+    # Find matching cards in our database
+    matches = card_matcher.find_best_matches(card_info, num_results=3)
+
     llm_duration = time.time() - llm_start_time
     print(f"[BENCHMARK] LLM analysis took {llm_duration:.4f}s")
     print(f"[BENCHMARK] Extracted card: {card_info.name if card_info else 'None'}")
@@ -403,12 +407,21 @@ If only the blue segment is filled, for example, return:
     # Add the image path to the card info for comparison
     card_info.image_path = temp_image_path
     
-    # Time database card matching
-    db_matching_start_time = time.time()
+    # --- HYBRID EMBEDDING PRE-FILTER ---
+    from app.utils.embedding import embedding_pre_filter
+    top_k_cards, embedding_duration = embedding_pre_filter(card_info, client, embeddings_file="data/card_embeddings.jsonl", top_k=50)
+    print(f"[BENCHMARK] Embedding pre-filter took {embedding_duration:.4f}s for OpenAI embedding + top K selection")
+    print(f"[BENCHMARK] Found {len(top_k_cards)} top K candidates based on embedding similarity")
+    print(f"[BENCHMARK] Top K candidates: {[card['name'] for card in top_k_cards]}")
+
+    # 4. Use your current matcher on just these cards
+    from app.models.card import CardData
+    from app.services.card_matcher import CardMatcher
+    temp_matcher = CardMatcher()
+    temp_matcher._all_cards = [CardData(**card) for card in top_k_cards]
     
-    # Find matching cards in our database - only get the top match
-    matches = card_matcher.find_best_matches(card_info, num_results=1)
-    
+    db_matching_start_time = time.time()  # Start timing before matching
+    matches = temp_matcher.find_best_matches(card_info, num_results=1)
     db_matching_duration = time.time() - db_matching_start_time
     print(f"[BENCHMARK] Database card matching took {db_matching_duration:.4f}s, "
           f"found {len(matches)} matches")
@@ -484,38 +497,16 @@ If only the blue segment is filled, for example, return:
     total_analysis_duration = time.time() - total_analysis_start_time
     print(f"[BENCHMARK] ==> TOTAL IMAGE ANALYSIS COMPLETED IN {total_analysis_duration:.4f}s")
     tcg_duration = (tcgplayer_processing_duration 
-                    if 'tcgplayer_processing_duration' in locals() else 0)
+                        if 'tcgplayer_processing_duration' in locals() else 0)
     print(f"[BENCHMARK] Breakdown: Image({image_processing_duration:.4f}s) + "
-          f"LLM({llm_duration:.4f}s) + DB({db_matching_duration:.4f}s) + "
+          f"LLM({llm_duration:.4f}s) + Embedding({embedding_duration:.4f}s) + DB({db_matching_duration:.4f}s) + "
           f"TCG({tcg_duration:.4f}s)")
     
     return {
         "description": card_info,
         "filename": file.filename,
         "size": len(image_bytes),
-        "benchmark": {
-            "total_duration": total_analysis_duration,
-            "image_processing_duration": image_processing_duration,
-            "llm_duration": llm_duration,
-            "database_matching_duration": db_matching_duration,
-            "tcgplayer_processing_duration": (
-                tcgplayer_processing_duration 
-                if 'tcgplayer_processing_duration' in locals() 
-                else 0
-            )
-        },
         "best_match": matching_product if matching_product else None,
         "best_match_price": matching_price if matching_price else None,
-        "matches": [
-            {
-                "card": match.card,
-                "score": match.score,
-                "tcgplayer_product_id": match.tcgplayer_product_id,
-                "tcgplayer_price": (
-                    match.tcgplayer_price['marketPrice'] 
-                    if match.tcgplayer_price 
-                    else None
-                )
-            } for match in matches
-        ]
+
     }

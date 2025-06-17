@@ -4,6 +4,7 @@ and finding the closest match using a weighted scoring system.
 """
 import glob
 import json
+import heapq
 from typing import Dict, List, Optional
 
 # Import models
@@ -18,12 +19,12 @@ class CardMatcher:
     A class to compare a CardInfo object with card data from JSON files
     and find the closest match using a weighted scoring system.
     """
-    
     def __init__(
         self,
         weights: Dict[str, float] = None,
         cards_dir: str = "data/cards_by_pack",
-        image_weight: float = 8.0  # High weight for image similarity
+        image_weight: float = 8.0,  # High weight for image similarity
+        use_image_comparison: bool = False,  # Toggle image comparison
     ):
         """
         Initialize the CardMatcher with configurable weights.
@@ -31,7 +32,6 @@ class CardMatcher:
         Args:
             weights: Dictionary mapping field names to their weights
             cards_dir: Directory containing the card JSON files
-            image_weight: Weight for image similarity score
         """
         # Default weights
         self.weights = weights or {
@@ -46,7 +46,10 @@ class CardMatcher:
         
         self.cards_dir = cards_dir
         self._all_cards = None  # Lazy loaded
+
         self.image_weight = image_weight
+        self.use_image_comparison = use_image_comparison
+
     
     @property
     def all_cards(self) -> List[CardData]:
@@ -256,7 +259,6 @@ class CardMatcher:
         llm_parsed_card_info: CardInfo, 
         num_results: int = 5,
         min_score: float = 0.3,
-        image_comparison_count: int = 3  # Number of top matches to apply image comparison to
     ) -> List[MatchResult]:
         """
         Find the best matching cards for a given CardInfo.
@@ -270,9 +272,8 @@ class CardMatcher:
         Returns:
             List of MatchResult objects containing matched card data and score
         """
-        # First phase: get preliminary matches based on metadata only
-        preliminary_matches = []
         
+        preliminary_matches = []
         for card_data in self.all_cards:
             # Initial scoring without image comparison
             score = self._calculate_metadata_similarity_score(llm_parsed_card_info, card_data)
@@ -280,36 +281,10 @@ class CardMatcher:
                 # Create a copy of the card data with the score
                 card_with_score = card_data.model_copy(update={"score": score})
                 preliminary_matches.append(MatchResult(card=card_with_score, score=score))
-        
         # Sort by initial score in descending order
         preliminary_matches.sort(key=lambda x: x.score, reverse=True)
-        
-        # Take top N preliminary matches for image comparison
-        top_candidates = preliminary_matches[:image_comparison_count]
-        final_matches = []
-        
-        # Second phase: Apply image comparison only to the top candidates if we have an image
-        if llm_parsed_card_info.image_path:
-            for match in top_candidates:
-                # Recalculate score with image comparison
-                new_score = self._calculate_combined_similarity_score(
-                    llm_parsed_card_info, 
-                    match.card
-                )
-                # Update the match with the new score that includes image comparison
-                updated_card = match.card.model_copy(update={"score": new_score})
-                final_matches.append(MatchResult(card=updated_card, score=new_score))
-            
-            # Add remaining preliminary matches without image comparison
-            final_matches.extend(preliminary_matches[image_comparison_count:])
-            
-            # Re-sort all matches by the final score
-            final_matches.sort(key=lambda x: x.score, reverse=True)
-        else:
-            # If no image path available, use the preliminary matches
-            final_matches = preliminary_matches
-        
-        return final_matches[:num_results]
+        return preliminary_matches[:num_results]
+
     
     def find_best_match(self, llm_parsed_card_info: CardInfo) -> Optional[MatchResult]:
         """
