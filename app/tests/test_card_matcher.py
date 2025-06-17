@@ -122,7 +122,7 @@ def main():
             "card_number": "ST14-001",
             "type": "Leader",
             "cost": 5,
-            "color": "Black"
+            "colors": ["Black"]
         }
         test_with_custom_card(card_info, weights)
 

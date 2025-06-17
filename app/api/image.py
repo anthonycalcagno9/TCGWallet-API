@@ -234,6 +234,58 @@ async def fetch_tcgplayer_data(pack_id: str) -> Dict:
         "prices": prices
     }
 
+async def fetch_tcgplayer_data_for_multiple_packs(pack_ids: List[str]) -> Dict:
+    """
+    Fetch TCGPlayer product and pricing data for multiple packs.
+    
+    Args:
+        pack_ids: List of pack IDs to fetch data for
+        
+    Returns:
+        Dictionary with combined products and prices from all packs
+    """
+    # Time the entire multi-pack TCGPlayer data fetch process
+    tcg_fetch_start_time = time.time()
+    
+    if not pack_ids:
+        return {
+            "pack_data": [],
+            "all_products": [],
+            "all_prices": []
+        }
+    
+    print(f"[BENCHMARK] Fetching TCGPlayer data for {len(pack_ids)} packs: {pack_ids}")
+    
+    # Fetch data for each pack in parallel
+    fetch_tasks = []
+    for pack_id in pack_ids:
+        task = asyncio.create_task(fetch_tcgplayer_data(pack_id))
+        fetch_tasks.append(task)
+    
+    # Wait for all tasks to complete
+    pack_data_list = await asyncio.gather(*fetch_tasks)
+    
+    # Combine all products and prices
+    all_products = []
+    all_prices = []
+    valid_pack_data = []
+    
+    for pack_data in pack_data_list:
+        if pack_data and pack_data.get("products"):
+            all_products.extend(pack_data.get("products", []))
+            all_prices.extend(pack_data.get("prices", []))
+            valid_pack_data.append(pack_data)
+    
+    total_duration = time.time() - tcg_fetch_start_time
+    print(f"[BENCHMARK] Multi-pack TCGPlayer data fetch took {total_duration:.4f}s")
+    print(f"[BENCHMARK] Combined {len(all_products)} products and {len(all_prices)} prices from {len(valid_pack_data)} packs")
+    
+    return {
+        "pack_data": valid_pack_data,
+        "all_products": all_products,
+        "all_prices": all_prices
+    }
+
 @router.post("/analyze-image")
 async def analyze_image(file: UploadFile = File(...)):
     """
@@ -284,15 +336,56 @@ async def analyze_image(file: UploadFile = File(...)):
     
     # Send image to OpenAI GPT-4o for analysis using image_url
     response = client.responses.parse(
-        model="o4-mini",
+        model="gpt-4.1",
         input=[
-            {"role": "system", "content": "You are a helpful assistant that describes images."},
+            {"role": "system", "content": "You are a helpful assistant that extracts data from images of One Piece Cards."},
             {
                 "role": "user",
                 "content": [
                     {
                         "type": "input_text",
-                        "text": "Analyze this image and get the details from the card."
+                        "text": """
+                                    To assist with accurate extraction, here is the layout of One Piece cards:
+                                    
+                                        Ignore text that is a part of the artwork (manga panel, flavor text, etc.).
+                                        If you are not sure about a field, return None.
+
+    Name: Centered near the bottom, often directly above the type ("Leader", "Character", etc.)
+    For event cards, the name is always at the bottom center. 
+
+
+    Type: Bottom of card - Below the name (e.g., "Leader", "Event")
+
+    Cost: Top left corner (only for non-Leader cards)
+
+    Power: Top right corner (not needed for this schema, but helps to distinguish from cost)
+
+    Rarity: Found in the bottom right corner, in a small rectangle.
+    Mapping:
+    - Common: "C"
+    - Uncommon: "U"
+    - Rare: "R"
+    - Super Rare: "SR"
+    - Secret Rare: "SEC"
+    - Promo: "P"
+    - Leader: "L"
+
+Color Extraction:
+— Look at the hexagon “color wheel” in the bottom-left corner of the card.
+— The wheel has up to five segments, each corresponding to one of: Red, Blue, Yellow, Green, Purple.
+— Any segment that is “filled in” indicates that color is active.
+— Cards may have one or two active segments.
+Return a JSON field named  
+  "color": [ … ]  
+where the array contains the names of all active colors.  
+If only the blue segment is filled, for example, return:  
+  "color": ["Blue"]
+    Counter: Usually top right or mid-right area in a red badge (only on Character/Event cards)
+
+    Trait: Below the name, sometimes inside a banner (e.g., "Land of Wano")
+
+    Card Number: Located at the bottom right, formatted as "P-001" or "OP01-001".
+                                """
                     },
                     {"type": "input_image", "image_url": data_url}
                 ]
@@ -305,6 +398,7 @@ async def analyze_image(file: UploadFile = File(...)):
     llm_duration = time.time() - llm_start_time
     print(f"[BENCHMARK] LLM analysis took {llm_duration:.4f}s")
     print(f"[BENCHMARK] Extracted card: {card_info.name if card_info else 'None'}")
+    print(f"CardInfo: {card_info}")
     
     # Add the image path to the card info for comparison
     card_info.image_path = temp_image_path
@@ -321,63 +415,68 @@ async def analyze_image(file: UploadFile = File(...)):
     
     # For the best match, get TCGPlayer data
     tcgplayer_data = None
-    
+    matching_product = None  # <-- Move this up for scope
+
     if matches and matches[0]:
         best_match = matches[0]
         print(f"[BENCHMARK] Best match: {best_match.card.name} (score: {best_match.score:.4f})")
         
         # Time TCGPlayer data fetching and processing
         tcgplayer_processing_start_time = time.time()
+
+        # --- MULTI-PACK LOGIC START ---
+        # Find all pack_ids for this card base ID
+        base_card_id = best_match.card.id.split("_p")[0] if "_p" in best_match.card.id else best_match.card.id
+        pack_ids = card_matcher.find_pack_ids_by_base_id(base_card_id)
+        print(f"[BENCHMARK] Found {len(pack_ids)} pack_ids for base card ID {base_card_id}: {pack_ids}")
+
+        # Fetch and aggregate TCGPlayer data for all packs
+        tcgplayer_data_multi = await fetch_tcgplayer_data_for_multiple_packs(pack_ids)
+        all_products = tcgplayer_data_multi.get("all_products", [])
+        all_prices = tcgplayer_data_multi.get("all_prices", [])
         
-        tcgplayer_data = await fetch_tcgplayer_data(best_match.card.pack_id)
-        
-        # Only process the best match (first one) because other matches 
-        # might be from different packs
-        if tcgplayer_data and tcgplayer_data.get("products"):
-            # Get the pack label for creating the full card ID
-            pack_label = tcgplayer_data.get("tcgplayer_group_label")
-            card_id = best_match.card.id
-            
-            # Try different formats for the card ID
-            possible_card_ids = [
-                f"{pack_label}-{card_id}",  # e.g., "OP01-001"
-                f"{pack_label}{card_id}",   # e.g., "OP01001"
-                card_id                     # Just the card number
-            ]
-            
-            print(f"Trying to match card with IDs: {possible_card_ids}")
-            
-            # Find the matching product using image comparison
-            matching_product = None
-            for possible_id in possible_card_ids:
-                matching_product = find_product_by_card_id(
-                    tcgplayer_data.get("products"), 
-                    possible_id,
-                    card_info.image_path  # Pass user's uploaded image for comparison
-                )
-                if matching_product:
-                    break
-            
-            # Time price matching
-            price_matching_start_time = time.time()
-            
-            # If we found a matching product, find its price
-            matching_price = None
+        # Try different formats for the card ID
+        pack_label = best_match.card.pack_id  # fallback if needed
+        card_id = best_match.card.id
+        possible_card_ids = [
+            card_id,  # Just the card number
+        ]
+        # Add pack label variants for all packs
+        for pack_data in tcgplayer_data_multi.get("pack_data", []):
+            label = pack_data.get("tcgplayer_group_label")
+            if label:
+                possible_card_ids.append(f"{label}-{card_id}")
+                possible_card_ids.append(f"{label}{card_id}")
+        possible_card_ids = list(dict.fromkeys(possible_card_ids))  # dedupe, preserve order
+        print(f"Trying to match card with IDs: {possible_card_ids}")
+
+        # Find the matching product using image comparison
+        for possible_id in possible_card_ids:
+            matching_product = find_product_by_card_id(
+                all_products, 
+                possible_id,
+                card_info.image_path  # Pass user's uploaded image for comparison
+            )
             if matching_product:
-                product_id = matching_product.get("productId")
-                for price in tcgplayer_data.get("prices", []):
-                    if price.get("productId") == product_id:
-                        matching_price = price
-                        break
-                
-                # Update only the best match with TCGPlayer info
-                best_match.tcgplayer_product_id = product_id
-                best_match.tcgplayer_product = matching_product
-                best_match.tcgplayer_price = matching_price
-            
-            price_matching_duration = time.time() - price_matching_start_time
-            print(f"[BENCHMARK] Price matching took {price_matching_duration:.4f}s")
-        
+                break
+
+        # Time price matching
+        price_matching_start_time = time.time()
+        matching_price = None
+        if matching_product:
+            product_id = matching_product.get("productId")
+            for price in all_prices:
+                if price.get("productId") == product_id:
+                    matching_price = price
+                    break
+            # Update only the best match with TCGPlayer info
+            best_match.tcgplayer_product_id = product_id
+            best_match.tcgplayer_product = matching_product
+            best_match.tcgplayer_price = matching_price
+        price_matching_duration = time.time() - price_matching_start_time
+        print(f"[BENCHMARK] Price matching took {price_matching_duration:.4f}s")
+        # --- MULTI-PACK LOGIC END ---
+
         tcgplayer_processing_duration = time.time() - tcgplayer_processing_start_time
         print(f"[BENCHMARK] Total TCGPlayer processing took {tcgplayer_processing_duration:.4f}s")
     
@@ -405,16 +504,8 @@ async def analyze_image(file: UploadFile = File(...)):
                 else 0
             )
         },
-        "best_match": {
-            "card": matches[0].card,
-            "score": matches[0].score,
-            "tcgplayer_product_id": matches[0].tcgplayer_product_id,
-            "tcgplayer_price": (
-                matches[0].tcgplayer_price['marketPrice'] 
-                if matches[0].tcgplayer_price 
-                else None
-            )
-        } if matches else None,
+        "best_match": matching_product if matching_product else None,
+        "best_match_price": matching_price if matching_price else None,
         "matches": [
             {
                 "card": match.card,

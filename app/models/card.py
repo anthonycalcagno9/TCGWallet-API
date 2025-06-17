@@ -7,7 +7,7 @@ from pydantic import BaseModel
 
 # Define types for the card fields
 Rarity = Literal[
-    'Common', 'Uncommon', 'Rare', 'Super Rare', 'Secret Rare', 'Promo', 'DON!!', 'Leader'
+    'Common', 'Uncommon', 'Rare', 'SuperRare', 'SecretRare', 'Promo', 'DON!!', 'Leader'
 ]
 Color = Literal['Red', 'Blue', 'Green', 'Yellow', 'Black', 'Purple']
 Counter = Literal[1000, 2000, 3000]
@@ -20,7 +20,7 @@ class CardInfo(BaseModel):
     type: Optional[CardType] = None
     cost: Optional[int] = None
     rarity: Optional[Rarity] = None
-    color: Optional[Color] = None
+    colors: Optional[List[Color]] = None
     counter: Optional[Counter] = None
     trait: Optional[str] = None
     card_number: Optional[str] = None

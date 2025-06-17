@@ -153,15 +153,23 @@ class CardMatcher:
                         score += self.weights["name"] * similarity
         
         # Color matching
-        if llm_parsed_card_info.color and card_data.colors:
-            # CardInfo has a single color, but JSON has a list of colors
-            if llm_parsed_card_info.color in card_data.colors:
+        if llm_parsed_card_info.colors and card_data.colors:
+            # CardInfo now has a list of colors, and JSON also has a list of colors
+            # Check if there's any overlap between the two lists
+            card_info_colors = [c.lower() for c in llm_parsed_card_info.colors]
+            card_data_colors = [c.lower() for c in card_data.colors]
+            
+            # Check for exact matches first
+            exact_matches = set(card_info_colors) & set(card_data_colors)
+            if exact_matches:
                 score += self.weights["color"]
-            elif card_data.colors and llm_parsed_card_info.color.lower() in [
-                c.lower() for c in card_data.colors
-            ]:
-                # Case-insensitive match
-                score += self.weights["color"] * 0.9
+            else:
+                # Check for partial matches (case-insensitive)
+                partial_matches = any(
+                    info_color in card_data_colors for info_color in card_info_colors
+                )
+                if partial_matches:
+                    score += self.weights["color"] * 0.9
         
         # Counter matching
         if llm_parsed_card_info.counter is not None and card_data.counter is not None:
@@ -180,21 +188,8 @@ class CardMatcher:
         
         # Rarity matching
         if llm_parsed_card_info.rarity and card_data.rarity:
-            # Map abbreviated rarities to full names
-            rarity_map = {
-                "C": "Common",
-                "UC": "Uncommon", 
-                "R": "Rare",
-                "SR": "SuperRare",
-                "SEC": "SecretRare",
-                "P": "Promo",
-                "L": "Leader",
-                "DON": "DON!!"
-            }
-            
-            info_rarity = rarity_map.get(llm_parsed_card_info.rarity, llm_parsed_card_info.rarity)
-            
-            if info_rarity.lower().replace(' ', '') == card_data.rarity.lower().replace(' ', ''):
+            # Map abbreviated rarities to full names                        
+            if llm_parsed_card_info.rarity.lower().replace(' ', '') == card_data.rarity.lower().replace(' ', ''):
                 score += self.weights["rarity"]
         
         # Normalize score to 0-1 range
@@ -330,3 +325,48 @@ class CardMatcher:
         if matches:
             return matches[0]
         return None
+    
+    def find_cards_by_base_id(self, base_id: str) -> List[CardData]:
+        """
+        Find all cards with the same base ID across all packs.
+        
+        Args:
+            base_id: The base card ID (e.g., "OP01-001" or "001")
+            
+        Returns:
+            List of CardData objects with matching base IDs
+        """
+        def extract_base_id(card_id: str) -> str:
+            """Extract base card ID by removing parallel suffixes"""
+            return card_id.split('_p')[0] if '_p' in card_id else card_id
+        
+        matching_cards = []
+        target_base_id = extract_base_id(base_id)
+        
+        for card_data in self.all_cards:
+            card_base_id = extract_base_id(card_data.id)
+            
+            # Normalize IDs for comparison
+            normalized_target = target_base_id.upper().replace('-', '').replace('_', '')
+            normalized_card = card_base_id.upper().replace('-', '').replace('_', '')
+            
+            if normalized_target == normalized_card:
+                matching_cards.append(card_data)
+        
+        return matching_cards
+    
+    def find_pack_ids_by_base_id(self, base_id: str) -> List[str]:
+        """
+        Find all unique pack_ids for cards with the same base ID across all packs.
+
+        Args:
+            base_id: The base card ID (e.g., "OP01-001" or "001")
+        Returns:
+            List of unique pack_id strings
+        """
+        matching_cards = self.find_cards_by_base_id(base_id)
+        pack_ids = set()
+        for card in matching_cards:
+            if hasattr(card, 'pack_id') and card.pack_id:
+                pack_ids.add(card.pack_id)
+        return list(pack_ids)
