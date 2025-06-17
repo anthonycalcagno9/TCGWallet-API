@@ -46,6 +46,24 @@ Upload a card image for analysis and recognition.
   },
   "filename": "luffy.jpg",
   "size": 123456,
+  "best_match": {
+    "card": {
+      "id": "OP01-001",
+      "pack_id": "OP01",
+      "name": "Monkey D. Luffy",
+      "rarity": "Secret Rare",
+      "category": "Leader",
+      "colors": ["Red"],
+      "cost": 5,
+      "counter": 2000,
+      "types": ["Straw Hat Crew"],
+      "effect": "Once per turn, when you activate the Main ability...",
+      "score": 0.95
+    },
+    "score": 0.95,
+    "tcgplayer_product_id": 12345,
+    "tcgplayer_price": 25.99
+  },
   "matches": [
     {
       "card": {
@@ -61,7 +79,9 @@ Upload a card image for analysis and recognition.
         "effect": "Once per turn, when you activate the Main ability...",
         "score": 0.95
       },
-      "score": 0.95
+      "score": 0.95,
+      "tcgplayer_product_id": 12345,
+      "tcgplayer_price": 25.99
     }
   ]
 }

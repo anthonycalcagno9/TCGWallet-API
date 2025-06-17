@@ -1,13 +1,13 @@
 """
 Card data models for the TCGWallet API.
 """
-from typing import List, Literal, Optional
+from typing import Dict, List, Literal, Optional
 
 from pydantic import BaseModel
 
 # Define types for the card fields
 Rarity = Literal[
-    'Common', 'Uncommon', 'Rare', 'Super Rare', 'Secret Rare', 'Promo', 'DON!!', 'Leader'
+    'Common', 'Uncommon', 'Rare', 'SuperRare', 'SecretRare', 'Promo', 'DON!!', 'Leader'
 ]
 Color = Literal['Red', 'Blue', 'Green', 'Yellow', 'Black', 'Purple']
 Counter = Literal[1000, 2000, 3000]
@@ -20,12 +20,14 @@ class CardInfo(BaseModel):
     type: Optional[CardType] = None
     cost: Optional[int] = None
     rarity: Optional[Rarity] = None
-    color: Optional[Color] = None
+    colors: Optional[List[Color]] = None
     counter: Optional[Counter] = None
     trait: Optional[str] = None
     card_number: Optional[str] = None
     price: Optional[float] = None
     tcgplayer_url: Optional[str] = None
+    tcgplayer_product_id: Optional[int] = None
+    image_path: Optional[str] = None  # Path to the user-uploaded image for comparison
 
 class CardData(BaseModel):
     """Card data model representing complete card data from database or JSON files."""
@@ -52,3 +54,6 @@ class MatchResult(BaseModel):
     """Result model for card matching operations."""
     card: CardData
     score: float
+    tcgplayer_product_id: Optional[int] = None
+    tcgplayer_product: Optional[Dict] = None
+    tcgplayer_price: Optional[Dict] = None

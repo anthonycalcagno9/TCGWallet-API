@@ -12,6 +12,10 @@ dependencies = [
     "uvicorn>=0.28.0",
     "requests>=2.31.0",
     "rapidfuzz>=3.6.1",
+    "pillow>=11.1.0",
+    "numpy>=1.25.0",
+    "scikit-image>=0.22.0",
+    "opencv-python>=4.8.0",
 ]
 
 [tool.ruff]

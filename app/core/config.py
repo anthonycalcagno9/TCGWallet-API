@@ -21,6 +21,12 @@ class Settings(BaseModel):
     # External Services
     openai_api_key: str = os.getenv("OPENAI_API_KEY", "")
     
+    # Image Processing Settings
+    compress_images: bool = os.getenv("COMPRESS_IMAGES", "true").lower() == "true"
+    image_max_size: int = int(os.getenv("IMAGE_MAX_SIZE", "1024"))
+    image_quality: int = int(os.getenv("IMAGE_QUALITY", "85"))
+    max_file_size_mb: float = float(os.getenv("MAX_FILE_SIZE_MB", "4.0"))
+    
     # Matcher Settings
     default_matcher_weights: dict = {
         "id": 7.0,
